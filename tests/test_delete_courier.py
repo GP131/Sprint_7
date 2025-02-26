@@ -1,37 +1,55 @@
 import allure
-import requests
 import random
+import requests
 
-from data import *
+from helpers.urls import *
+from helpers.data import EXPECTED_STATUS_CODES, ERROR_MESSAGES
+from helpers.helper import *
 
 
 class TestDeleteCourier:
 
-    @allure.title('Удалить курьера с несуществующим id')
+    @allure.title("Удалить курьера с несуществующим id")
     def test_delete_courier_not_exist_id_return_message_error(self):
         non_existent_id = random.randint(100000, 999999)
-        response = requests.delete(f'{MAIN_URL}{CREATE_COURIER_URL}/{non_existent_id}')
 
-        assert response.status_code == 404
-        assert response.json() == {'code': 404, 'message': 'Курьера с таким id нет.'}
+        with allure.step("Отправка запроса на удаление несуществующего курьера"):
+            response = requests.delete(f"{MAIN_URL}{CREATE_COURIER_URL}/{non_existent_id}")
 
-    @allure.title('Удалить курьера')
-    def test_delete_courier_return_ok_true(self, create_courier):
-        payload = {"login": LOGIN, "password": PASSWORD}
-        response = requests.post(f'{MAIN_URL}{LOGIN_COURIER_URL}', json=payload)
-        assert response.status_code == 200
+        with allure.step("Проверяем, что сервер вернул ошибку 404 и сообщение"):
+            assert response.status_code == EXPECTED_STATUS_CODES["not_found"], \
+                f"Unexpected status code: {response.status_code}, response: {response.text}"
+            assert response.json() == ERROR_MESSAGES["courier_not_exist"], \
+                f"Unexpected response body: {response.json()}"
 
-        id_courier = response.json().get('id')
-        assert id_courier, "Courier ID was not returned from the login request"
+    @allure.title("Удалить курьера")
+    def test_delete_courier_return_ok_true(self, courier):
+        login, password = courier
 
-        response = requests.delete(f'{MAIN_URL}{CREATE_COURIER_URL}/{id_courier}')
+        with allure.step("Логин курьера для получения его ID"):
+            response_courier = requests.post(f"{MAIN_URL}{LOGIN_COURIER_URL}",
+                                             json={"login": login, "password": password})
+            assert response_courier.status_code == EXPECTED_STATUS_CODES["success"], \
+                f"Unexpected status code: {response_courier.status_code}, response: {response_courier.text}"
 
-        assert response.status_code == 200
-        assert response.json() == {'ok': True}
+            courier_id = response_courier.json().get("id")
+            assert courier_id, "Courier ID was not returned from the login request"
 
-    @allure.title('Удалить курьера без id курьера')
+        with allure.step("Отправка запроса на удаление курьера"):
+            response = requests.delete(f"{MAIN_URL}{CREATE_COURIER_URL}/{courier_id}")
+
+        with allure.step("Проверяем, что сервер вернул 200 и {'ok': True}"):
+            assert response.status_code == EXPECTED_STATUS_CODES["success"], \
+                f"Unexpected status code: {response.status_code}, response: {response.text}"
+            assert response.json() == {"ok": True}, f"Unexpected response body: {response.json()}"
+
+    @allure.title("Удалить курьера без id курьера")
     def test_delete_courier_without_id_return_message_not_found(self):
-        response = requests.delete(f'{MAIN_URL}{CREATE_COURIER_URL}')
+        with allure.step("Отправка запроса на удаление без ID курьера"):
+            response = requests.delete(f"{MAIN_URL}{CREATE_COURIER_URL}")
 
-        assert response.status_code == 404
-        assert response.json() == {'code': 404, 'message': 'Not Found.'}
+        with allure.step("Проверяем, что сервер вернул ошибку 404 и сообщение"):
+            assert response.status_code == EXPECTED_STATUS_CODES["not_found"], \
+                f"Unexpected status code: {response.status_code}, response: {response.text}"
+            assert response.json() == ERROR_MESSAGES["not_found"], \
+                f"Unexpected response body: {response.json()}"

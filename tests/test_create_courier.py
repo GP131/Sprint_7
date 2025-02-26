@@ -1,52 +1,69 @@
 import pytest
 import allure
 import requests
-from helpers import *
-from data import *
+
+from helpers.helper import *
+from helpers.data import *
 
 
 class TestCreateCourier:
 
-    @allure.title('Создать двух одинаковых курьеров')
-    def test_create_duplicate_courier_fails(self, create_courier, delete_courier):
-        payload = {"login": LOGIN, "password": PASSWORD, "firstName": FIRST_NAME}
-        response = requests.post(f'{MAIN_URL}{CREATE_COURIER_URL}', json=payload)
+    @allure.title("Создать двух одинаковых курьеров")
+    def test_create_duplicate_courier_fails(self, courier):
+        login, password = courier
+        payload = {"login": login, "password": password}
 
-        assert response.status_code == 409
-        assert response.json() == {
-            "code": 409,
-            "message": "Этот логин уже используется. Попробуйте другой."
+        with allure.step("Отправка запроса на создание курьера с дублирующимся логином"):
+            response = requests.post(f"{MAIN_URL}{CREATE_COURIER_URL}", json=payload)
+
+        with allure.step("Проверяем, что сервер вернул ошибку 409 и сообщение"):
+            assert response.status_code == EXPECTED_STATUS_CODES["conflict"], \
+                f"Unexpected status code: {response.status_code}, response: {response.text}"
+            assert response.json() == ERROR_MESSAGES["login_already_exists"], \
+                f"Unexpected response body: {response.json()}"
+
+    @allure.title("Создать курьера и получить корректный ответ")
+    def test_create_courier_success(self):
+        payload = {
+            "login": generate_login(),
+            "password": generate_password(),
+            "firstName": generate_first_name(),
         }
 
-    @allure.title('Создать курьера и получить корректный ответ')
-    def test_create_courier_success(self, delete_courier):
-        payload = {"login": LOGIN, "password": PASSWORD, "firstName": FIRST_NAME}
-        response = requests.post(f'{MAIN_URL}{CREATE_COURIER_URL}', json=payload)
+        with allure.step("Отправка запроса на создание нового курьера"):
+            response = requests.post(f"{MAIN_URL}{CREATE_COURIER_URL}", json=payload)
 
-        assert response.status_code == 201
-        assert response.json() == {"ok": True}
+        with allure.step("Проверяем, что сервер вернул статус 201 и успешный ответ"):
+            assert response.status_code == EXPECTED_STATUS_CODES["created"], \
+                f"Unexpected status code: {response.status_code}, response: {response.text}"
+            assert response.json() == {"ok": True}, \
+                f"Unexpected response body: {response.json()}"
 
-    @allure.title('Создать курьера без логина или пароля')
+    @allure.title("Создать курьера без логина или пароля")
     @pytest.mark.parametrize("payload", [
-        {"password": PASSWORD, "firstName": FIRST_NAME},  # No login
-        {"login": LOGIN, "firstName": FIRST_NAME}  # No password
+        {"password": generate_password(), "firstName": generate_first_name()},  # Нет логина
+        {"login": generate_login(), "firstName": generate_first_name()}  # Нет пароля
     ])
     def test_create_courier_without_required_field_show_message_bad_request(self, payload):
-        response = requests.post(f'{MAIN_URL}{CREATE_COURIER_URL}', json=payload)
+        with allure.step("Отправка запроса на создание курьера без обязательного поля"):
+            response = requests.post(f"{MAIN_URL}{CREATE_COURIER_URL}", json=payload)
 
-        assert response.status_code == 400
-        assert response.json() == {
-            "code": 400,
-            "message": "Недостаточно данных для создания учетной записи"
-        }
+        with allure.step("Проверяем, что сервер вернул ошибку 400 и сообщение"):
+            assert response.status_code == EXPECTED_STATUS_CODES["bad_request"], \
+                f"Unexpected status code: {response.status_code}, response: {response.text}"
+            assert response.json() == ERROR_MESSAGES["insufficient_data"], \
+                f"Unexpected response body: {response.json()}"
 
-    @allure.title('Создать курьера c логином, который уже существует в системе')
-    def test_create_courier_with_login_already_exists_show_message_conflict(self, create_courier, delete_courier):
-        payload = {"login": LOGIN, "password": generate_password(), "firstName": generate_first_name()}
-        response = requests.post(f'{MAIN_URL}{CREATE_COURIER_URL}', json=payload)
+    @allure.title("Создать курьера c логином, который уже существует в системе")
+    def test_create_courier_with_login_already_exists_show_message_conflict(self, courier):
+        login, _ = courier
+        payload = {"login": login, "password": generate_password(), "firstName": generate_first_name()}
 
-        assert response.status_code == 409
-        assert response.json() == {
-            "code": 409,
-            "message": "Этот логин уже используется. Попробуйте другой."
-        }
+        with allure.step("Отправка запроса на создание курьера с уже существующим логином"):
+            response = requests.post(f"{MAIN_URL}{CREATE_COURIER_URL}", json=payload)
+
+        with allure.step("Проверяем, что сервер вернул ошибку 409 и сообщение"):
+            assert response.status_code == EXPECTED_STATUS_CODES["conflict"], \
+                f"Unexpected status code: {response.status_code}, response: {response.text}"
+            assert response.json() == ERROR_MESSAGES["login_already_exists"], \
+                f"Unexpected response body: {response.json()}"
